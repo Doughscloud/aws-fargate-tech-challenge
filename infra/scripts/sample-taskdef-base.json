@@ -1,0 +1,26 @@
+{
+  "family": "REPLACE_FAMILY",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "REPLACE_EXEC_ROLE",
+  "taskRoleArn": "REPLACE_TASK_ROLE",
+  "containerDefinitions": [
+    {
+      "name": "REPLACE_NAME",
+      "image": "REPLACE_IMAGE",
+      "essential": true,
+      "portMappings": [{ "containerPort": REPLACE_PORT, "protocol": "tcp" }],
+      "environment": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-region": "REPLACE_REGION",
+          "awslogs-group": "REPLACE_LOG_GROUP",
+          "awslogs-stream-prefix": "REPLACE_NAME"
+        }
+      }
+    }
+  ]
+}
