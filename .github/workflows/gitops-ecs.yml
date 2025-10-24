@@ -1,0 +1,170 @@
+name: GitOps ECS (Build & Deploy)
+
+on:
+  push:
+    branches: [ gitops ]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'infra/ecs-task-defs/**'
+      - '.github/workflows/gitops-ecs.yml'
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }} # e.g., us-east-1
+  ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com
+
+  # ECR repos (names only)
+  ECR_REPO_FRONTEND: ${{ secrets.ECR_REPO_FRONTEND }} # e.g., devops-tech-challenge1-dev-frontend
+  ECR_REPO_BACKEND:  ${{ secrets.ECR_REPO_BACKEND }}  # e.g., devops-tech-challenge1-dev-backend
+
+  # ECS cluster & services
+  ECS_CLUSTER: ${{ secrets.ECS_CLUSTER }}                   # e.g., devops-tech-challenge1-dev-cluster
+  ECS_SERVICE_FRONTEND: ${{ secrets.ECS_SERVICE_FRONTEND }} # e.g., devops-tech-challenge1-dev-frontend
+  ECS_SERVICE_BACKEND:  ${{ secrets.ECS_SERVICE_BACKEND }}  # e.g., devops-tech-challenge1-dev-backend
+
+  # Task roles (from Terraform or console)
+  FRONTEND_EXEC_ROLE_ARN: ${{ secrets.FRONTEND_EXEC_ROLE_ARN }}
+  FRONTEND_TASK_ROLE_ARN: ${{ secrets.FRONTEND_TASK_ROLE_ARN }}
+  BACKEND_EXEC_ROLE_ARN:  ${{ secrets.BACKEND_EXEC_ROLE_ARN }}
+  BACKEND_TASK_ROLE_ARN:  ${{ secrets.BACKEND_TASK_ROLE_ARN }}
+
+  # Logging groups
+  FRONTEND_LOG_GROUP: /ecs/devops-tech-challenge1-dev-frontend
+  BACKEND_LOG_GROUP:  /ecs/devops-tech-challenge1-dev-backend
+
+  # ALB DNS for CORS
+  FRONTEND_ALB_DNS: ${{ secrets.FRONTEND_ALB_DNS }} # http://<alb-dns>
+
+  # TaskDef families/names
+  FAMILY_FRONTEND: ${{ secrets.FAMILY_FRONTEND }} # devops-tech-challenge1-dev-frontend
+  FAMILY_BACKEND:  ${{ secrets.FAMILY_BACKEND }}  # devops-tech-challenge1-dev-backend
+  FRONTEND_NAME:   ${{ secrets.FRONTEND_NAME }}   # devops-tech-challenge1-dev-frontend
+  BACKEND_NAME:    ${{ secrets.BACKEND_NAME }}    # devops-tech-challenge1-dev-backend
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-push:
+    name: Build & Push Images (frontend+backend)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set image tag
+        id: vars
+        run: echo "TAG=${GITHUB_SHA::12}" >> $GITHUB_OUTPUT
+
+      - name: Build & Push Frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_FRONTEND }}:${{ steps.vars.outputs.TAG }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_FRONTEND }}:latest
+          build-args: |
+            REACT_APP_API_URL=http://backend.local:8080
+
+      - name: Build & Push Backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_BACKEND }}:${{ steps.vars.outputs.TAG }}
+            ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_BACKEND }}:latest
+
+      - name: Export image URLs
+        id: images
+        run: |
+          echo "FRONTEND_IMAGE=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_FRONTEND }}:${{ steps.vars.outputs.TAG }}" >> $GITHUB_OUTPUT
+          echo "BACKEND_IMAGE=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPO_BACKEND }}:${{ steps.vars.outputs.TAG }}" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Render TaskDefs & Deploy to ECS
+    needs: [build-push]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Render frontend task def
+        id: render_frontend
+        run: |
+          sed \
+            -e "s|REPLACE_FAMILY_FRONTEND|${FAMILY_FRONTEND}|g" \
+            -e "s|REPLACE_EXEC_ROLE_FRONTEND|${FRONTEND_EXEC_ROLE_ARN}|g" \
+            -e "s|REPLACE_TASK_ROLE_FRONTEND|${FRONTEND_TASK_ROLE_ARN}|g" \
+            -e "s|REPLACE_FRONTEND_NAME|${FRONTEND_NAME}|g" \
+            -e "s|REPLACE_FRONTEND_IMAGE|${{ steps.images.outputs.FRONTEND_IMAGE }}|g" \
+            -e "s|REPLACE_REGION|${AWS_REGION}|g" \
+            -e "s|REPLACE_FRONTEND_LOG_GROUP|${FRONTEND_LOG_GROUP}|g" \
+            infra/ecs-task-defs/frontend-taskdef.json > frontend-taskdef.rendered.json
+          echo "FRONTEND_TASKDEF=frontend-taskdef.rendered.json" >> $GITHUB_OUTPUT
+
+      - name: Render backend task def
+        id: render_backend
+        run: |
+          sed \
+            -e "s|REPLACE_FAMILY_BACKEND|${FAMILY_BACKEND}|g" \
+            -e "s|REPLACE_EXEC_ROLE_BACKEND|${BACKEND_EXEC_ROLE_ARN}|g" \
+            -e "s|REPLACE_TASK_ROLE_BACKEND|${BACKEND_TASK_ROLE_ARN}|g" \
+            -e "s|REPLACE_BACKEND_NAME|${BACKEND_NAME}|g" \
+            -e "s|REPLACE_BACKEND_IMAGE|${{ steps.images.outputs.BACKEND_IMAGE }}|g" \
+            -e "s|REPLACE_REGION|${AWS_REGION}|g" \
+            -e "s|REPLACE_BACKEND_LOG_GROUP|${BACKEND_LOG_GROUP}|g" \
+            -e "s|REPLACE_FRONTEND_ALB_DNS|${FRONTEND_ALB_DNS}|g" \
+            infra/ecs-task-defs/backend-taskdef.json > backend-taskdef.rendered.json
+          echo "BACKEND_TASKDEF=backend-taskdef.rendered.json" >> $GITHUB_OUTPUT
+
+      - name: Register frontend task definition
+        id: reg_f
+        run: |
+          ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://frontend-taskdef.rendered.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "FRONTEND_TD_ARN=$ARN" >> $GITHUB_OUTPUT
+
+      - name: Register backend task definition
+        id: reg_b
+        run: |
+          ARN=$(aws ecs register-task-definition \
+            --cli-input-json file://backend-taskdef.rendered.json \
+            --query 'taskDefinition.taskDefinitionArn' --output text)
+          echo "BACKEND_TD_ARN=$ARN" >> $GITHUB_OUTPUT
+
+      - name: Update frontend service
+        run: |
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE_FRONTEND}" \
+            --task-definition "${{ steps.reg_f.outputs.FRONTEND_TD_ARN }}"
+
+      - name: Update backend service
+        run: |
+          aws ecs update-service \
+            --cluster "${ECS_CLUSTER}" \
+            --service "${ECS_SERVICE_BACKEND}" \
+            --task-definition "${{ steps.reg_b.outputs.BACKEND_TD_ARN }}"

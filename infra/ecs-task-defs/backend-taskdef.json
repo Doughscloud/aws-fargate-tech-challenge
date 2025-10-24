@@ -1,0 +1,29 @@
+{
+  "family": "REPLACE_FAMILY_BACKEND",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "REPLACE_EXEC_ROLE_BACKEND",
+  "taskRoleArn": "REPLACE_TASK_ROLE_BACKEND",
+  "containerDefinitions": [
+    {
+      "name": "REPLACE_BACKEND_NAME",
+      "image": "REPLACE_BACKEND_IMAGE",
+      "essential": true,
+      "portMappings": [{ "containerPort": 8080, "protocol": "tcp" }],
+      "environment": [
+        { "name": "PORT", "value": "8080" },
+        { "name": "CORS_ALLOWED_ORIGIN", "value": "http://REPLACE_FRONTEND_ALB_DNS" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-region": "REPLACE_REGION",
+          "awslogs-group": "REPLACE_BACKEND_LOG_GROUP",
+          "awslogs-stream-prefix": "backend"
+        }
+      }
+    }
+  ]
+}

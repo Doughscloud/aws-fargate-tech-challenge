@@ -1,0 +1,28 @@
+{
+  "family": "REPLACE_FAMILY_FRONTEND",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "REPLACE_EXEC_ROLE_FRONTEND",
+  "taskRoleArn": "REPLACE_TASK_ROLE_FRONTEND",
+  "containerDefinitions": [
+    {
+      "name": "REPLACE_FRONTEND_NAME",
+      "image": "REPLACE_FRONTEND_IMAGE",
+      "essential": true,
+      "portMappings": [{ "containerPort": 80, "protocol": "tcp" }],
+      "environment": [
+        { "name": "REACT_APP_API_URL", "value": "http://backend.local:8080" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+          "options": {
+            "awslogs-region": "REPLACE_REGION",
+            "awslogs-group": "REPLACE_FRONTEND_LOG_GROUP",
+            "awslogs-stream-prefix": "frontend"
+          }
+      }
+    }
+  ]
+}
