@@ -1,6 +1,11 @@
 terraform {
   required_version = ">= 1.5.0"
-  required_providers { aws = { source = "hashicorp/aws" version = ">= 5.0" } }
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
 }
 provider "aws" { region = var.aws_region }
 
@@ -41,16 +46,38 @@ module "alb" {
 resource "aws_security_group" "frontend" {
   name   = "${local.name}-frontend-sg"
   vpc_id = module.vpc.vpc_id
-  ingress { description="From ALB" from_port=80 to_port=80 protocol="tcp" security_groups=[module.alb.alb_sg_id] }
-  egress  { from_port=0 to_port=0 protocol="-1" cidr_blocks=["0.0.0.0/0"] }
+  ingress {
+    description     = "From ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [module.alb.alb_sg_id]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
   tags = local.tags
 }
 
 resource "aws_security_group" "backend" {
   name   = "${local.name}-backend-sg"
   vpc_id = module.vpc.vpc_id
-  ingress { description="From frontend" from_port=8080 to_port=8080 protocol="tcp" security_groups=[aws_security_group.frontend.id] }
-  egress  { from_port=0 to_port=0 protocol="-1" cidr_blocks=["0.0.0.0/0"] }
+  ingress {
+    description     = "From frontend"
+    from_port       = 8080
+    to_port         = 8080
+    protocol        = "tcp"
+    security_groups = [aws_security_group.frontend.id]
+  }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
   tags = local.tags
 }
 
