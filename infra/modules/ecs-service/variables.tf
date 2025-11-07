@@ -15,6 +15,12 @@ variable "tg_arn" { default = null }
 variable "use_service_discovery" { default = false }
 variable "namespace_id" { default = null }
 variable "dns_name" { default = null }
-variable "env_vars" { type = map(string) default = {} }
+variable "env_vars" {
+  type    = map(string)
+  default = {}
+}
 variable "log_group_name" { default = null }
-variable "tags" { type = map(string) default = {} }
+variable "tags" {
+  type    = map(string)
+  default = {}
+}

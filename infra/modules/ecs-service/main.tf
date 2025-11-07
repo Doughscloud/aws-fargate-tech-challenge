@@ -1,4 +1,12 @@
-terraform { required_providers { aws = { source = "hashicorp/aws" version = ">= 5.0" } } }
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
 data "aws_region" "current" {}
 
 resource "aws_iam_role" "task_exec" {
@@ -88,10 +96,15 @@ resource "aws_service_discovery_service" "this" {
   name  = var.dns_name
   dns_config {
     namespace_id = var.namespace_id
-    dns_records { ttl = 5 type = "A" }
+    dns_records {
+      ttl  = 5
+      type = "A"
+    }
     routing_policy = "MULTIVALUE"
   }
-  health_check_custom_config { failure_threshold = 1 }
+  health_check_custom_config {
+    failure_threshold = 1
+  }
   tags = var.tags
 }
 
@@ -110,7 +123,9 @@ resource "aws_appautoscaling_policy" "cpu" {
   service_namespace  = aws_appautoscaling_target.asg.service_namespace
   target_tracking_scaling_policy_configuration {
     target_value = 50
-    predefined_metric_specification { predefined_metric_type = "ECSServiceAverageCPUUtilization" }
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
     scale_in_cooldown  = 60
     scale_out_cooldown = 60
   }
